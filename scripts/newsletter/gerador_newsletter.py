@@ -312,6 +312,9 @@ def montar_bloco(
     linhas.append("🏦 *VA Capital — Consultoria de Investimentos*")
     linhas.append("_Vinicius Peta · Mentor de Investimentos_")
     linhas.append("_CPA | C-Pro R | C-Pro I | Pós-graduado em Gestão de Risco (FIA)_")
+    linhas.append("")
+    linhas.append("📲 Instagram: @vacapital_")
+    linhas.append("🎓 Curso completo: https://viniciuspeta.com")
     return "\n".join(linhas)
 
 
@@ -324,7 +327,8 @@ def montar_html(corpo_texto: str, data_local: datetime) -> str:
         .replace(">", "&gt;")
     )
     corpo_html = re.sub(r"\*([^*\n]+)\*", r"<strong>\1</strong>", corpo_html)
-    corpo_html = re.sub(r"_([^_\n]+)_", r"<em>\1</em>", corpo_html)
+    corpo_html = re.sub(r"(?<!\w)_([^_\n]+?)_(?!\w)", r"<em>\1</em>", corpo_html)
+    corpo_html = re.sub(r"(https?://[^\s<]+)", r'<a href="\1" style="color:#0a66c2;text-decoration:none;">\1</a>', corpo_html)
     corpo_html = corpo_html.replace("\n", "<br>\n")
 
     return f"""<!DOCTYPE html>
