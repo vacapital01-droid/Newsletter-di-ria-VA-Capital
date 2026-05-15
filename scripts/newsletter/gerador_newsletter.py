@@ -245,7 +245,7 @@ def selecionar_e_analisar(noticias: list[Noticia], categoria: str, categoria_lab
     prompt = PROMPT_GEMINI.format(categoria=categoria, categoria_label=categoria_label, lista=lista)
 
     model = genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-1.5-flash",
         generation_config={
             "response_mime_type": "application/json",
             "temperature": 0.4,
