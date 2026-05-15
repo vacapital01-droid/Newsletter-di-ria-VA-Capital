@@ -1,0 +1,55 @@
+name: Newsletter Diária VA Capital
+
+on:
+  schedule:
+    # 10:00 UTC = 07:00 America/Sao_Paulo (UTC-3, sem horário de verão)
+    # Roda Seg-Sex (1=segunda ... 5=sexta)
+    - cron: "0 10 * * 1-5"
+  workflow_dispatch: # permite rodar manual pelo botão "Run workflow" no GitHub
+
+permissions:
+  contents: write # pra commitar o backup .md do histórico
+
+concurrency:
+  group: newsletter-daily
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: scripts/newsletter/requirements.txt
+
+      - name: Instalar dependências
+        run: pip install -r scripts/newsletter/requirements.txt
+
+      - name: Gerar e enviar newsletter
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NEWSLETTER_FROM: ${{ secrets.NEWSLETTER_FROM }}
+          NEWSLETTER_TO: ${{ secrets.NEWSLETTER_TO }}
+          NEWSLETTER_REPLY_TO: ${{ secrets.NEWSLETTER_REPLY_TO }}
+        run: python scripts/newsletter/gerador_newsletter.py
+
+      - name: Commit do backup no histórico
+        run: |
+          set -e
+          if [ -z "$(git status --porcelain scripts/newsletter/historico)" ]; then
+            echo "Nenhuma alteração no histórico — pulando commit."
+            exit 0
+          fi
+          git config user.name "VA Capital Bot"
+          git config user.email "bot@vacapital.com.br"
+          git add scripts/newsletter/historico
+          git commit -m "newsletter: backup $(date -u +%Y-%m-%d)"
+          git push
