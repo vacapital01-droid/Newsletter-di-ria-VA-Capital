@@ -337,10 +337,10 @@ def montar_html(corpo_texto: str, data_local: datetime) -> str:
 
 
 def enviar_email(corpo_texto: str, html: str, data_local: datetime) -> dict:
-    api_key = os.environ["RESEND_API_KEY"]
+    api_key = os.environ["RESEND_API_KEY"].strip()
     destinatarios = [e.strip() for e in os.environ["NEWSLETTER_TO"].split(",") if e.strip()]
-    remetente = os.environ["NEWSLETTER_FROM"]
-    reply_to = os.environ.get("NEWSLETTER_REPLY_TO")
+    remetente = os.environ["NEWSLETTER_FROM"].strip()
+    reply_to = (os.environ.get("NEWSLETTER_REPLY_TO") or "").strip() or None
 
     payload = {
         "from": remetente,
