@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -387,8 +388,11 @@ def main() -> int:
     coletadas = coletar_todas(limite_horas=24)
 
     print("[2/4] Selecionando e analisando com Gemini Flash...")
+    # Free tier do Gemini permite 5 req/min — sleep entre chamadas evita 429 ResourceExhausted
     brasil = selecionar_e_analisar(coletadas["brasil"], "brasil", "Brasil")
+    time.sleep(15)
     cripto = selecionar_e_analisar(coletadas["cripto"], "cripto", "Cripto")
+    time.sleep(15)
     fii = selecionar_e_analisar(coletadas["fii"], "fii", "FIIs e REITs")
 
     data_local = datetime.now(SP_TZ)
