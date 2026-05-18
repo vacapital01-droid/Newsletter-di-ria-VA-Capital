@@ -347,9 +347,12 @@ def enviar_email(corpo_texto: str, html: str, data_local: datetime) -> dict:
     remetente = os.environ["NEWSLETTER_FROM"].strip()
     reply_to = (os.environ.get("NEWSLETTER_REPLY_TO") or "").strip() or None
 
+    # Privacidade: TO = só o remetente próprio; BCC = lista real de clientes
+    # Assim nenhum cliente vê o email dos outros (LGPD + boa prática de newsletter)
     payload = {
         "from": remetente,
-        "to": destinatarios,
+        "to": ["noticias@vacapital.com.br"],
+        "bcc": destinatarios,
         "subject": f"VA Capital — Notícias {data_local.strftime('%d/%m/%Y')}",
         "html": html,
         "text": corpo_texto,
