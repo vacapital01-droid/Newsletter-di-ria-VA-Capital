@@ -315,6 +315,7 @@ def montar_bloco(
     linhas.append("_CPA | C-Pro R | C-Pro I | Pós-graduado em Gestão de Risco (FIA)_")
     linhas.append("")
     linhas.append("📲 Instagram: @vacapital_")
+    linhas.append("🎧 Podcast diário VA Capital — Mercado diário: https://open.spotify.com/show/033iOXGH2JY1MasriN5bzA")
     linhas.append("🎓 Curso completo: https://viniciuspeta.com")
     return "\n".join(linhas)
 
