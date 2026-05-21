@@ -348,11 +348,15 @@ def enviar_email(corpo_texto: str, html: str, data_local: datetime) -> dict:
     remetente = os.environ["NEWSLETTER_FROM"].strip()
     reply_to = (os.environ.get("NEWSLETTER_REPLY_TO") or "").strip() or None
 
-    # Privacidade: TO = só o remetente próprio; BCC = lista real de clientes
-    # Assim nenhum cliente vê o email dos outros (LGPD + boa prática de newsletter)
+    # Privacidade: TO = caixa real própria (Vini); BCC = lista real de clientes.
+    # Assim nenhum cliente vê o email dos outros (LGPD + boa prática de newsletter).
+    # OBS: o TO precisa ser uma CAIXA DE ENTRADA REAL e entregável — usar um
+    # endereço apenas-remetente (ex.: noticias@vacapital.com.br) faz o envio
+    # quicar e pode comprometer a entrega do BCC.
+    to_proprio = (os.environ.get("NEWSLETTER_OWNER") or "vacapital01@gmail.com").strip()
     payload = {
         "from": remetente,
-        "to": ["noticias@vacapital.com.br"],
+        "to": [to_proprio],
         "bcc": destinatarios,
         "subject": f"VA Capital — Notícias {data_local.strftime('%d/%m/%Y')}",
         "html": html,
