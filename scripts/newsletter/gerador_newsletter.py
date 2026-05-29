@@ -6,15 +6,18 @@ Pipeline:
   2. Pré-filtra por palavras-chave relevantes pro investidor BR
   3. Manda candidatas pro Gemini Flash (grátis) — IA seleciona 7 por categoria e
      gera análise ✅ positivo / ❌ negativo / 💡 impacto prático
-  4. Monta o bloco no padrão VA Capital validado pelo Vini
-  5. Envia via Resend pra lista de destinatários
+  4. Monta o email no FORMATO APROVADO pelo Vini (29/05/2026): header azul-marinho,
+     RESUMO DO DIA com 7 bullets, 3 blocos (Brasil/Cripto/FIIs) com 7 notícias cada,
+     e 1 CTA por bloco (YouTube, Instagram, Podcast) em <a href> absoluto
+  5. Envia via Resend (TO = dono entregável, BCC = lista de clientes — LGPD)
   6. Salva backup .md em scripts/newsletter/historico/
 
 Variáveis de ambiente necessárias (configuradas como secrets no GitHub Actions):
   GEMINI_API_KEY        - API key do Google AI Studio (aistudio.google.com)
   RESEND_API_KEY        - API key do Resend (resend.com)
-  NEWSLETTER_FROM       - email remetente verificado no Resend (ex: vini@vacapital.com.br)
-  NEWSLETTER_TO         - lista de destinatários separada por vírgula
+  NEWSLETTER_FROM       - email remetente verificado no Resend (ex: noticias@vacapital.com.br)
+  NEWSLETTER_TO         - lista de destinatários (clientes) separada por vírgula -> vão no BCC
+  NEWSLETTER_OWNER      - caixa real entregável do dono -> vai no TO (padrão vacapital01@gmail.com)
   NEWSLETTER_REPLY_TO   - (opcional) email pra reply-to
 """
 
@@ -37,6 +40,12 @@ from zoneinfo import ZoneInfo
 
 
 SP_TZ = ZoneInfo("America/Sao_Paulo")
+
+# Links — SEMPRE absolutos https://, sem espaço/quebra dentro do href.
+URL_YOUTUBE = "https://youtube.com/@VACapitalinvestimentos"
+URL_INSTAGRAM = "https://instagram.com/vacapital_"
+URL_PODCAST = "https://open.spotify.com/show/033iOXGH2JY1MasriN5bzA"
+URL_CURSO = "https://viniciuspeta.com"
 
 FEEDS_BRASIL = [
     "https://www.infomoney.com.br/mercados/feed/",
@@ -260,107 +269,229 @@ def selecionar_e_analisar(noticias: list[Noticia], categoria: str, categoria_lab
         return json.loads(texto)
 
 
-def montar_bloco(
-    brasil: dict,
-    cripto: dict,
-    fii: dict,
-    data_local: datetime,
-) -> str:
-    dias = ["Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado", "Domingo"]
-    dia_str = dias[data_local.weekday()]
-    data_str = data_local.strftime("%d/%m/%Y")
+# ---------------------------------------------------------------------------
+# FORMATO APROVADO (Vini, 29/05/2026): header azul-marinho + RESUMO DO DIA +
+# 3 blocos (Brasil/Cripto/FIIs) com ✅❌💡 e 1 CTA por bloco em <a href>.
+# Espelho de enviar_avulso_2026-05-29.py.
+# ---------------------------------------------------------------------------
 
-    resumo_pontos: list[str] = []
-    for categoria_resp in (brasil, cripto, fii):
-        resumo = categoria_resp.get("resumo_categoria", "").strip()
-        if resumo:
-            resumo_pontos.append(f"• {resumo}")
-    while len(resumo_pontos) < 7:
-        resumo_pontos.append("• Mercado em compasso de espera.")
-    resumo_pontos = resumo_pontos[:7]
-
-    linhas: list[str] = []
-    linhas.append("*VA CAPITAL* 📊")
-    linhas.append(f"*Notícias do Mercado | {dia_str} {data_str}*")
-    linhas.append("")
-    linhas.append("📋 RESUMO DO DIA")
-    linhas.extend(resumo_pontos)
-    linhas.append("")
-
-    def _bloco(emoji_categoria: str, titulo_categoria: str, dados: dict, numero_inicial: int) -> list[str]:
-        out: list[str] = []
-        out.append(f"{emoji_categoria} {titulo_categoria}")
-        for i, item in enumerate(dados.get("noticias", []), start=numero_inicial):
-            emoji = item.get("emoji", "📰")
-            titulo = item.get("titulo", "").strip()
-            positivo = item.get("positivo", "").strip()
-            negativo = item.get("negativo", "").strip()
-            impacto = item.get("impacto", "").strip()
-            out.append(f"{emoji} {i}. *{titulo}*")
-            if positivo:
-                out.append(f"✅ {positivo}")
-            if negativo:
-                out.append(f"❌ {negativo}")
-            if impacto:
-                out.append(f"💡 {impacto}")
-            out.append("")
-        return out
-
-    linhas.extend(_bloco("🇧🇷", "BRASIL", brasil, 1))
-    linhas.extend(_bloco("🪙", "CRIPTO", cripto, 8))
-    linhas.extend(_bloco("🏢", "FIIs e REITs", fii, 15))
-
-    linhas.append("🏦 *VA Capital — Consultoria de Investimentos*")
-    linhas.append("_Vinicius Peta · Mentor de Investimentos_")
-    linhas.append("_CPA | C-Pro R | C-Pro I | Pós-graduado em Gestão de Risco (FIA)_")
-    linhas.append("")
-    linhas.append("📲 Instagram: @vacapital_")
-    linhas.append("🎧 Podcast diário VA Capital — Mercado diário: https://open.spotify.com/show/033iOXGH2JY1MasriN5bzA")
-    linhas.append("🎓 Curso completo: https://viniciuspeta.com")
-    return "\n".join(linhas)
+DIAS_SEMANA = [
+    "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira",
+    "Sexta-feira", "Sábado", "Domingo",
+]
 
 
-def montar_html(corpo_texto: str, data_local: datetime) -> str:
-    titulo = f"Newsletter VA Capital — {data_local.strftime('%d/%m/%Y')}"
-    corpo_html = (
-        corpo_texto
+def _esc(texto: str) -> str:
+    """Escapa apenas o necessário pra texto dentro de HTML (preserva emojis)."""
+    return (
+        (texto or "")
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
     )
-    corpo_html = re.sub(r"\*([^*\n]+)\*", r"<strong>\1</strong>", corpo_html)
-    corpo_html = re.sub(r"(?<!\w)_([^_\n]+?)_(?!\w)", r"<em>\1</em>", corpo_html)
-    corpo_html = re.sub(r"(https?://[^\s<]+)", r'<a href="\1" style="color:#0a66c2;text-decoration:none;">\1</a>', corpo_html)
-    corpo_html = corpo_html.replace("\n", "<br>\n")
+
+
+def _noticia_html(emoji: str, n: int, titulo: str, pos: str, neg: str, imp: str) -> str:
+    bloco = f"""
+      <div style="margin:0 0 18px 0;">
+        <p style="margin:0 0 6px 0;font-size:16px;font-weight:700;color:#0b1f33;">{_esc(emoji)} {n}. {_esc(titulo)}</p>"""
+    if pos:
+        bloco += f'\n        <p style="margin:0 0 3px 0;font-size:15px;color:#1a1a1a;">✅ {_esc(pos)}</p>'
+    if neg:
+        bloco += f'\n        <p style="margin:0 0 3px 0;font-size:15px;color:#1a1a1a;">❌ {_esc(neg)}</p>'
+    if imp:
+        bloco += f'\n        <p style="margin:0;font-size:15px;color:#1a1a1a;">💡 {_esc(imp)}</p>'
+    bloco += "\n      </div>"
+    return bloco
+
+
+def _cta_html(texto: str, url: str, rotulo: str) -> str:
+    return f"""
+      <div style="margin:8px 0 26px 0;padding:14px 16px;background:#f4f7fb;border-left:4px solid #1d4ed8;border-radius:6px;">
+        <p style="margin:0;font-size:15px;color:#0b1f33;">{texto}
+          <a href="{url}" style="color:#1d4ed8;font-weight:700;text-decoration:none;">{rotulo}</a>
+        </p>
+      </div>"""
+
+
+def _secao_titulo_html(emoji: str, texto: str) -> str:
+    return f"""
+      <h2 style="margin:30px 0 16px 0;padding-bottom:8px;font-size:19px;color:#0b1f33;border-bottom:2px solid #1d4ed8;">{emoji} {texto}</h2>"""
+
+
+def _bloco_noticias_html(dados: dict, numero_inicial: int) -> str:
+    out = ""
+    for i, item in enumerate(dados.get("noticias", []), start=numero_inicial):
+        out += _noticia_html(
+            item.get("emoji", "📰"),
+            i,
+            item.get("titulo", "").strip(),
+            item.get("positivo", "").strip(),
+            item.get("negativo", "").strip(),
+            item.get("impacto", "").strip(),
+        )
+    return out
+
+
+def _resumo_bullets(brasil: dict, cripto: dict, fii: dict) -> list[str]:
+    """RESUMO DO DIA: prioriza 1 resumo por categoria + completa com manchetes
+    selecionadas pela IA até chegar em 7 bullets cobrindo Brasil/Cripto/FII."""
+    bullets: list[str] = []
+    for cat in (brasil, cripto, fii):
+        r = (cat.get("resumo_categoria") or "").strip()
+        if r:
+            bullets.append(r)
+
+    # Completa com títulos das notícias (intercalando categorias) até 7.
+    pilhas = [
+        [it.get("titulo", "").strip() for it in brasil.get("noticias", [])],
+        [it.get("titulo", "").strip() for it in cripto.get("noticias", [])],
+        [it.get("titulo", "").strip() for it in fii.get("noticias", [])],
+    ]
+    idx = 0
+    while len(bullets) < 7 and any(pilhas):
+        pilha = pilhas[idx % 3]
+        idx += 1
+        if pilha:
+            t = pilha.pop(0)
+            if t and t not in bullets:
+                bullets.append(t)
+        if not any(pilhas):
+            break
+
+    while len(bullets) < 7:
+        bullets.append("Mercado em compasso de espera.")
+    return bullets[:7]
+
+
+def montar_html(brasil: dict, cripto: dict, fii: dict, data_local: datetime, assunto: str) -> str:
+    dia_str = DIAS_SEMANA[data_local.weekday()]
+    data_str = data_local.strftime("%d/%m")
+
+    resumo_html = "".join(
+        f'<li style="margin:0 0 6px 0;font-size:15px;color:#1a1a1a;">{_esc(b)}</li>'
+        for b in _resumo_bullets(brasil, cripto, fii)
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><title>{titulo}</title></head>
-<body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; line-height: 1.55; color: #1a1a1a;">
-<div style="font-size: 15px;">{corpo_html}</div>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>{_esc(assunto)}</title></head>
+<body style="margin:0;padding:0;background:#eef1f5;">
+  <div style="max-width:640px;margin:0 auto;padding:0;background:#ffffff;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.55;color:#1a1a1a;">
+
+    <div style="background:#0b1f33;padding:24px 28px;">
+      <p style="margin:0;font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.5px;">VA CAPITAL 📊</p>
+      <p style="margin:6px 0 0 0;font-size:15px;color:#9fc0e8;">Notícias do Mercado | {dia_str} {data_str}</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+
+      <div style="background:#f4f7fb;border-radius:8px;padding:16px 20px;margin:0 0 24px 0;">
+        <p style="margin:0 0 10px 0;font-size:16px;font-weight:700;color:#0b1f33;">📋 RESUMO DO DIA</p>
+        <ul style="margin:0;padding:0 0 0 20px;">{resumo_html}</ul>
+      </div>
+
+      {_secao_titulo_html("🇧🇷", "BRASIL")}
+      {_bloco_noticias_html(brasil, 1)}
+      {_cta_html("Análises diárias do mercado em vídeo no nosso canal:", URL_YOUTUBE, "YouTube VA Capital ▶")}
+
+      {_secao_titulo_html("🪙", "CRIPTO")}
+      {_bloco_noticias_html(cripto, 8)}
+      {_cta_html("Conteúdo rápido e visual todo dia no nosso Instagram:", URL_INSTAGRAM, "@vacapital_ no Instagram")}
+
+      {_secao_titulo_html("🏢", "FIIs E REITs")}
+      {_bloco_noticias_html(fii, 15)}
+      {_cta_html("Ouça o resumo do mercado em áudio no nosso podcast:", URL_PODCAST, "VA Capital — Mercado diário 🎧")}
+
+      <div style="margin:30px 0 0 0;padding:20px;background:#0b1f33;border-radius:8px;">
+        <p style="margin:0 0 6px 0;font-size:16px;font-weight:700;color:#ffffff;">🏦 VA Capital — Mentoria de Investimentos</p>
+        <p style="margin:0;font-size:14px;color:#cdddf0;">Vinicius Peta — Mentor de Investimentos</p>
+        <p style="margin:2px 0 0 0;font-size:13px;color:#9fc0e8;">CPA | C-Pro R | C-Pro I | Pós-graduado em Gestão de Risco (FIA)</p>
+        <p style="margin:14px 0 0 0;font-size:13px;color:#cdddf0;">🎓 Curso completo: <a href="{URL_CURSO}" style="color:#9fc0e8;text-decoration:none;">viniciuspeta.com</a></p>
+        <p style="margin:2px 0 0 0;font-size:13px;color:#cdddf0;">✉️ Contato: vacapital01@gmail.com</p>
+      </div>
+
+      <p style="margin:18px 0 0 0;font-size:12px;color:#8a98a8;line-height:1.5;">
+        Este conteúdo é informativo e educacional e não constitui recomendação de compra ou venda de qualquer ativo.
+        Rentabilidade passada não garante resultados futuros. Faça sua própria análise antes de investir.
+      </p>
+
+    </div>
+  </div>
 </body>
 </html>"""
 
 
-def enviar_email(corpo_texto: str, html: str, data_local: datetime) -> dict:
+def montar_texto(brasil: dict, cripto: dict, fii: dict, data_local: datetime) -> str:
+    """Versão texto puro (fallback de clientes que não renderizam HTML) e base do backup .md."""
+    dia_str = DIAS_SEMANA[data_local.weekday()]
+    data_str = data_local.strftime("%d/%m/%Y")
+
+    linhas: list[str] = []
+    linhas.append("VA CAPITAL")
+    linhas.append(f"Notícias do Mercado | {dia_str} {data_str}")
+    linhas.append("")
+    linhas.append("RESUMO DO DIA")
+    for b in _resumo_bullets(brasil, cripto, fii):
+        linhas.append(f"- {b}")
+    linhas.append("")
+
+    def _bloco(titulo_categoria: str, dados: dict, numero_inicial: int) -> None:
+        linhas.append(titulo_categoria)
+        for i, item in enumerate(dados.get("noticias", []), start=numero_inicial):
+            linhas.append(f"{item.get('emoji', '')} {i}. {item.get('titulo', '').strip()}")
+            if item.get("positivo"):
+                linhas.append(f"   + {item['positivo'].strip()}")
+            if item.get("negativo"):
+                linhas.append(f"   - {item['negativo'].strip()}")
+            if item.get("impacto"):
+                linhas.append(f"   > {item['impacto'].strip()}")
+            linhas.append("")
+
+    _bloco("BRASIL", brasil, 1)
+    linhas.append(f"YouTube VA Capital: {URL_YOUTUBE}")
+    linhas.append("")
+    _bloco("CRIPTO", cripto, 8)
+    linhas.append(f"Instagram: {URL_INSTAGRAM}")
+    linhas.append("")
+    _bloco("FIIs E REITs", fii, 15)
+    linhas.append(f"Podcast VA Capital — Mercado diário: {URL_PODCAST}")
+    linhas.append("")
+    linhas.append("VA Capital — Mentoria de Investimentos")
+    linhas.append("Vinicius Peta — Mentor de Investimentos")
+    linhas.append("CPA | C-Pro R | C-Pro I | Pós-graduado em Gestão de Risco (FIA)")
+    linhas.append(f"Curso completo: {URL_CURSO}")
+    linhas.append("Contato: vacapital01@gmail.com")
+    linhas.append("")
+    linhas.append("Conteúdo informativo/educacional, não é recomendação de compra/venda.")
+    return "\n".join(linhas)
+
+
+def enviar_email(html: str, texto: str, data_local: datetime) -> dict:
     api_key = os.environ["RESEND_API_KEY"].strip()
     destinatarios = [e.strip() for e in os.environ["NEWSLETTER_TO"].split(",") if e.strip()]
     remetente = os.environ["NEWSLETTER_FROM"].strip()
     reply_to = (os.environ.get("NEWSLETTER_REPLY_TO") or "").strip() or None
 
-    # Privacidade: TO = caixa real própria (Vini); BCC = lista real de clientes.
-    # Assim nenhum cliente vê o email dos outros (LGPD + boa prática de newsletter).
+    dia_str = DIAS_SEMANA[data_local.weekday()]
+    assunto = f"Notícias do Mercado | {dia_str} {data_local.strftime('%d/%m')}"
+
+    # Privacidade (LGPD): TO = caixa real própria (Vini); BCC = lista de clientes.
+    # Assim nenhum cliente vê o email dos outros.
     # OBS: o TO precisa ser uma CAIXA DE ENTRADA REAL e entregável — usar um
     # endereço apenas-remetente (ex.: noticias@vacapital.com.br) faz o envio
     # quicar e pode comprometer a entrega do BCC.
     to_proprio = (os.environ.get("NEWSLETTER_OWNER") or "vacapital01@gmail.com").strip()
+    # Garante que o dono não fique duplicado no BCC.
+    destinatarios = [e for e in destinatarios if e.lower() != to_proprio.lower()]
+
     payload = {
         "from": remetente,
         "to": [to_proprio],
         "bcc": destinatarios,
-        "subject": f"VA Capital — Notícias {data_local.strftime('%d/%m/%Y')}",
+        "subject": assunto,
         "html": html,
-        "text": corpo_texto,
+        "text": texto,
     }
     if reply_to:
         payload["reply_to"] = reply_to
@@ -375,13 +506,14 @@ def enviar_email(corpo_texto: str, html: str, data_local: datetime) -> dict:
         timeout=30,
     )
     response.raise_for_status()
+    print(f"TO: {to_proprio} | BCC: {len(destinatarios)} clientes")
     return response.json()
 
 
-def salvar_backup(corpo_texto: str, data_local: datetime) -> Path:
+def salvar_backup(texto: str, data_local: datetime) -> Path:
     destino = Path(__file__).parent / "historico" / f"{data_local.strftime('%Y-%m-%d')}-noticias.md"
     destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_text(corpo_texto + "\n", encoding="utf-8")
+    destino.write_text(texto + "\n", encoding="utf-8")
     return destino
 
 
@@ -396,7 +528,7 @@ def main() -> int:
     coletadas = coletar_todas(limite_horas=24)
 
     print("[2/4] Selecionando e analisando com Gemini Flash...")
-    # Free tier do Gemini permite 5 req/min — sleep entre chamadas evita 429 ResourceExhausted
+    # Free tier do Gemini permite poucas req/min — sleep entre chamadas evita 429 ResourceExhausted.
     brasil = selecionar_e_analisar(coletadas["brasil"], "brasil", "Brasil")
     time.sleep(15)
     cripto = selecionar_e_analisar(coletadas["cripto"], "cripto", "Cripto")
@@ -404,21 +536,31 @@ def main() -> int:
     fii = selecionar_e_analisar(coletadas["fii"], "fii", "FIIs e REITs")
 
     data_local = datetime.now(SP_TZ)
-    print("[3/4] Montando bloco final no padrão VA Capital...")
-    corpo_texto = montar_bloco(brasil, cripto, fii, data_local)
-    html = montar_html(corpo_texto, data_local)
+    dia_str = DIAS_SEMANA[data_local.weekday()]
+    assunto = f"Notícias do Mercado | {dia_str} {data_local.strftime('%d/%m')}"
 
-    backup = salvar_backup(corpo_texto, data_local)
+    print("[3/4] Montando email no formato aprovado (HTML azul-marinho)...")
+    html = montar_html(brasil, cripto, fii, data_local, assunto)
+    texto = montar_texto(brasil, cripto, fii, data_local)
+
+    n_total = sum(len(c.get("noticias", [])) for c in (brasil, cripto, fii))
+    print(f"  -> {n_total} notícias no total (Brasil {len(brasil.get('noticias', []))} / "
+          f"Cripto {len(cripto.get('noticias', []))} / FIIs {len(fii.get('noticias', []))})")
+
+    backup = salvar_backup(texto, data_local)
     print(f"  -> backup salvo em {backup}")
+
+    # Preview do HTML também salvo (útil pra inspeção manual / dry-run).
+    preview = Path(__file__).parent / "historico" / f"{data_local.strftime('%Y-%m-%d')}-preview.html"
+    preview.write_text(html, encoding="utf-8")
+    print(f"  -> preview HTML salvo em {preview}")
 
     print("[4/4] Enviando email via Resend...")
     if not os.environ.get("RESEND_API_KEY"):
         print("  [DRY-RUN] RESEND_API_KEY não definida, pulando envio.")
-        print("--- BLOCO GERADO ---")
-        print(corpo_texto)
         return 0
 
-    resultado = enviar_email(corpo_texto, html, data_local)
+    resultado = enviar_email(html, texto, data_local)
     print(f"  -> email enviado, id: {resultado.get('id')}")
     return 0
 
