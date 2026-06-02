@@ -2,9 +2,10 @@ name: Newsletter Diária VA Capital
 
 on:
   schedule:
-    # 10:00 UTC = 07:00 America/Sao_Paulo (UTC-3, sem horário de verão)
+    # 10:13 UTC ~= 07:13 America/Sao_Paulo (UTC-3, sem horário de verão)
+    # Minuto fora da "hora cheia" reduz o atraso de fila do GitHub Actions
     # Roda Seg-Sex (1=segunda ... 5=sexta)
-    - cron: "0 10 * * 1-5"
+    - cron: "13 10 * * 1-5"
   workflow_dispatch: # permite rodar manual pelo botão "Run workflow" no GitHub
 
 permissions:
