@@ -518,6 +518,19 @@ def salvar_backup(texto: str, data_local: datetime) -> Path:
 
 
 def main() -> int:
+    # Trava de idempotência: se a newsletter de hoje já foi gerada/enviada
+    # (backup .md já existe), não envia de novo. Protege contra o agendamento
+    # atrasado do GitHub Actions (que pode disparar horas depois do horário do
+    # cron) e contra envio manual + agendado no mesmo dia, evitando duplicar
+    # email pros clientes. Use NEWSLETTER_FORCE=1 pra forçar reenvio.
+    data_hoje = datetime.now(SP_TZ)
+    backup_hoje = Path(__file__).parent / "historico" / f"{data_hoje.strftime('%Y-%m-%d')}-noticias.md"
+    if backup_hoje.exists() and os.environ.get("NEWSLETTER_FORCE") != "1":
+        print(f"Newsletter de {data_hoje.strftime('%Y-%m-%d')} já foi enviada "
+              f"(backup existe em {backup_hoje}). Pulando para não duplicar. "
+              f"Use NEWSLETTER_FORCE=1 para forçar reenvio.")
+        return 0
+
     chave_gemini = os.environ.get("GEMINI_API_KEY")
     if not chave_gemini:
         print("ERRO: variável GEMINI_API_KEY não definida.", file=sys.stderr)
