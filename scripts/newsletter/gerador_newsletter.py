@@ -52,7 +52,7 @@ URL_CURSO = "https://viniciuspeta.com"
 # Assim some sozinho no dia seguinte e não vaza pros próximos envios.
 # Para destacar outro vídeo no futuro, basta atualizar este dict (data + url + textos).
 VIDEO_DESTAQUE = {
-    "data": "2026-06-04",
+    "data": "2026-06-05",
     "titulo": "VENDI Usiminas com 150% de LUCRO 🤑",
     "url": "https://youtu.be/qaawPby5VU0",
     "chamada": (
