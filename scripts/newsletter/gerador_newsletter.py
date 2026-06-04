@@ -47,6 +47,20 @@ URL_INSTAGRAM = "https://instagram.com/vacapital_"
 URL_PODCAST = "https://open.spotify.com/show/033iOXGH2JY1MasriN5bzA"
 URL_CURSO = "https://viniciuspeta.com"
 
+# Bloco de destaque de vídeo do YouTube — DATE-GATED.
+# Só aparece no email se a data local (SP) == VIDEO_DESTAQUE["data"].
+# Assim some sozinho no dia seguinte e não vaza pros próximos envios.
+# Para destacar outro vídeo no futuro, basta atualizar este dict (data + url + textos).
+VIDEO_DESTAQUE = {
+    "data": "2026-06-04",
+    "titulo": "VENDI Usiminas com 150% de LUCRO 🤑",
+    "url": "https://youtu.be/qaawPby5VU0",
+    "chamada": (
+        "Vendi Usiminas com +150% de lucro e mostro ao vivo como girei a carteira "
+        "— 3 empresas novas + reforços. Ação ou FII, qual rende mais?"
+    ),
+}
+
 FEEDS_BRASIL = [
     "https://www.infomoney.com.br/mercados/feed/",
     "https://www.infomoney.com.br/economia/feed/",
@@ -364,6 +378,24 @@ def _resumo_bullets(brasil: dict, cripto: dict, fii: dict) -> list[str]:
     return bullets[:7]
 
 
+def _video_destaque_html(data_local: datetime) -> str:
+    """Caixa de destaque de vídeo no topo do email. DATE-GATED: só renderiza se a
+    data local de hoje bate com VIDEO_DESTAQUE['data'] (formato YYYY-MM-DD). Fora
+    desse dia retorna string vazia, então o bloco some sozinho nos próximos envios."""
+    if data_local.strftime("%Y-%m-%d") != VIDEO_DESTAQUE.get("data"):
+        return ""
+    titulo = _esc(VIDEO_DESTAQUE["titulo"])
+    chamada = _esc(VIDEO_DESTAQUE["chamada"])
+    url = VIDEO_DESTAQUE["url"]
+    return f"""
+      <div style="background:#fff7ed;border:1px solid #f5b34a;border-left:5px solid #f59e0b;border-radius:8px;padding:18px 20px;margin:0 0 24px 0;">
+        <p style="margin:0 0 8px 0;font-size:13px;font-weight:800;color:#b45309;letter-spacing:0.5px;text-transform:uppercase;">🎥 Vídeo novo no canal</p>
+        <p style="margin:0 0 6px 0;font-size:17px;font-weight:800;color:#0b1f33;">{titulo}</p>
+        <p style="margin:0 0 14px 0;font-size:14px;color:#33414f;line-height:1.5;">{chamada}</p>
+        <a href="{url}" style="display:inline-block;background:#cc0000;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:11px 22px;border-radius:6px;">▶ Assistir agora</a>
+      </div>"""
+
+
 def montar_html(brasil: dict, cripto: dict, fii: dict, data_local: datetime, assunto: str) -> str:
     dia_str = DIAS_SEMANA[data_local.weekday()]
     data_str = data_local.strftime("%d/%m")
@@ -385,7 +417,7 @@ def montar_html(brasil: dict, cripto: dict, fii: dict, data_local: datetime, ass
     </div>
 
     <div style="padding:24px 28px;">
-
+      {_video_destaque_html(data_local)}
       <div style="background:#f4f7fb;border-radius:8px;padding:16px 20px;margin:0 0 24px 0;">
         <p style="margin:0 0 10px 0;font-size:16px;font-weight:700;color:#0b1f33;">📋 RESUMO DO DIA</p>
         <ul style="margin:0;padding:0 0 0 20px;">{resumo_html}</ul>
