@@ -1,0 +1,38 @@
+name: Envio avulso VA Capital
+
+# Disparo manual apenas. Envia o conteúdo de scripts/newsletter/avulso.html
+# para a mesma lista da newsletter diária (TO = dono, BCC = clientes).
+on:
+  workflow_dispatch:
+    inputs:
+      assunto:
+        description: "Assunto do email"
+        required: true
+        type: string
+      dry_run:
+        description: "Só mostrar o conteúdo, sem enviar"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install requests
+
+      - name: Enviar
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NEWSLETTER_FROM: ${{ secrets.NEWSLETTER_FROM }}
+          NEWSLETTER_TO: ${{ secrets.NEWSLETTER_TO }}
+          AVULSO_ASSUNTO: ${{ inputs.assunto }}
+          AVULSO_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: python scripts/newsletter/enviar_avulso.py
